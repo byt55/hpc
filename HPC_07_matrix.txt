@@ -1,0 +1,110 @@
+%%writefile matrix_multiply.cu
+ #include <iostream>
+ using namespace std;
+ // CUDA kernel to multiply matrices
+ __global__ void multiply(int* A, int* B, int* C, int size) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row < size && col < size) {
+        int sum = 0;
+        for (int i = 0; i < size; i++) {
+            sum += A[row * size + i] * B[i * size + col];
+        }
+        C[row * size + col] = sum;
+    }
+ }
+ void initialize(int* matrix, int size) {
+    for (int i = 0; i < size * size; i++) {
+        matrix[i] = rand() % 10;
+    }
+ }
+ void print(int* matrix, int size) {
+    for (int row = 0; row < size; row++) {
+        for (int col = 0; col < size; col++) {
+            cout << matrix[row * size + col] << " ";
+        }
+        cout << '\n';
+    }
+    cout << '\n';
+ }
+ int main() {
+    int N = 2;
+    size_t matrixBytes = N * N * sizeof(int);
+    int* A = new int[N * N];
+    int* B = new int[N * N];
+    int* C = new int[N * N];
+    initialize(A, N);
+    initialize(B, N);
+    cout << "Matrix A:\n";
+    print(A, N);
+    cout << "Matrix B:\n";
+    print(B, N);
+    int *d_A, *d_B, *d_C;
+    cudaError_t err;
+    // Allocate memory on the device
+    err = cudaMalloc(&d_A, matrixBytes);
+    if (err != cudaSuccess) {
+        cout << "CUDA malloc failed for A: " << cudaGetErrorString(err) << endl;
+        return -1;
+    }
+
+    err = cudaMalloc(&d_B, matrixBytes);
+    if (err != cudaSuccess) {
+        cout << "CUDA malloc failed for B: " << cudaGetErrorString(err) << endl;
+        return -1;
+    }
+    err = cudaMalloc(&d_C, matrixBytes);
+    if (err != cudaSuccess) {
+        cout << "CUDA malloc failed for C: " << cudaGetErrorString(err) << endl;
+        return -1;
+    }
+    // Copy data from host to device
+    err = cudaMemcpy(d_A, A, matrixBytes, cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        cout << "CUDA memcpy failed for A: " << cudaGetErrorString(err) << endl;
+        return -1;
+    }
+    err = cudaMemcpy(d_B, B, matrixBytes, cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        cout << "CUDA memcpy failed for B: " << cudaGetErrorString(err) << endl;
+        return -1;
+    }
+    // Thread and block dimensions
+    dim3 threads(2, 2);
+    dim3 blocks((N + threads.x - 1) / threads.x, (N + threads.y - 1) / threads.y);
+    // Launch kernel
+    multiply<<<blocks, threads>>>(d_A, d_B, d_C, N);
+    // Synchronize to make sure the kernel finishes
+    cudaDeviceSynchronize();
+    // Check for kernel launch errors
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        cout << "CUDA kernel launch failed: " << cudaGetErrorString(err) << endl;
+        return -1;
+    }
+    // Copy result back to host
+    err = cudaMemcpy(C, d_C, matrixBytes, cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        cout << "CUDA memcpy failed for C: " << cudaGetErrorString(err) << endl;
+        return -1;
+    }
+    // Output the result
+    cout << "Multiplication of Matrix A and B:\n";
+    print(C, N);
+    // Clean up
+    delete[] A;
+    delete[] B;
+    delete[] C;
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+    return 0;
+ }
+
+
+
+!nvcc -arch=sm_75 -o matrix_multiply matrix_multiply.cu
+
+
+
+!./matrix_multiply
