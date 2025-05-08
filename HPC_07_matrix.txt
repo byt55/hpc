@@ -1,7 +1,5 @@
 %%writefile matrix_mul.cu
-#include 
-#include 
-#include 
+#include<iostream>
 using namespace std;
 
 // CUDA kernel for matrix multiplication
